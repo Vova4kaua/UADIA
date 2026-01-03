@@ -1,0 +1,300 @@
+{% extends 'base.html' %}
+
+{% block title %}Бэкапы Сервера{% endblock %}
+
+{% block extra_css %}
+<style>
+    .backup-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .backup-info h4 {
+        color: #667eea;
+        margin-bottom: 0.5rem;
+    }
+
+    .backup-meta {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        color: #6b7280;
+        font-size: 0.9rem;
+    }
+
+    .backup-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .loading-spinner {
+        text-align: center;
+        padding: 2rem;
+        color: #667eea;
+    }
+
+    .create-backup-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+
+    .create-backup-section h3 {
+        margin-bottom: 1rem;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 5px;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+
+    .alert-success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #10b981;
+    }
+
+    .alert-error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #ef4444;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="alertContainer"></div>
+
+<div class="card">
+    <h2 style="color: #667eea; margin-bottom: 1.5rem;">
+        💾 Бэкапы Сервера: <span id="serverName">Загрузка...</span>
+    </h2>
+
+    <div class="create-backup-section">
+        <h3>Создать новый бэкап</h3>
+        <p style="margin-bottom: 1rem; opacity: 0.9;">
+            Создайте полный бэкап сервера со всеми данными, мирами и настройками
+        </p>
+        <button id="createBackupBtn" class="btn" style="background: white; color: #667eea; font-weight: bold;">
+            ➕ Создать Бэкап
+        </button>
+    </div>
+
+    <div id="backupsContainer">
+        <div class="loading-spinner">
+            <p>⏳ Загрузка бэкапов...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const serverId = {{ server_id }};
+    const apiBase = '/api';
+
+    function showAlert(message, type) {
+        const alertContainer = document.getElementById('alertContainer');
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.textContent = message;
+        alertContainer.appendChild(alert);
+        
+        setTimeout(() => {
+            alert.remove();
+        }, 5000);
+    }
+
+    async function loadServerInfo() {
+        try {
+            const response = await fetch(`${apiBase}/servers/${serverId}/`);
+            const data = await response.json();
+            document.getElementById('serverName').textContent = data.name;
+        } catch (error) {
+            console.error('Error loading server info:', error);
+        }
+    }
+
+    async function loadBackups() {
+        try {
+            const response = await fetch(`${apiBase}/backups/?server=${serverId}`);
+            const data = await response.json();
+
+            const backups = data.results || data;
+            displayBackups(backups);
+        } catch (error) {
+            console.error('Error loading backups:', error);
+            document.getElementById('backupsContainer').innerHTML = 
+                '<p style="text-align: center; color: #ef4444; padding: 2rem;">Ошибка загрузки бэкапов</p>';
+        }
+    }
+
+    function displayBackups(backups) {
+        const container = document.getElementById('backupsContainer');
+        
+        if (backups.length === 0) {
+            container.innerHTML = `
+                <p style="text-align: center; color: #6b7280; padding: 2rem;">
+                    Нет доступных бэкапов. Создайте первый бэкап!
+                </p>
+            `;
+            return;
+        }
+
+        container.innerHTML = backups.map(backup => {
+            const createdDate = new Date(backup.created_at);
+            const formattedDate = createdDate.toLocaleString('ru-RU');
+            const size = backup.file_size ? formatBytes(backup.file_size) : 'N/A';
+
+            return `
+                <div class="backup-card">
+                    <div class="backup-info">
+                        <h4>Бэкап #${backup.id}</h4>
+                        <div class="backup-meta">
+                            <span>📅 ${formattedDate}</span>
+                            <span>💽 ${size}</span>
+                            <span>📁 ${backup.file_path}</span>
+                        </div>
+                    </div>
+                    <div class="backup-actions">
+                        <button class="btn restore-btn" data-id="${backup.id}" style="background: #10b981;">
+                            🔄 Восстановить
+                        </button>
+                        <button class="btn download-btn" data-id="${backup.id}" style="background: #3b82f6;">
+                            ⬇️ Скачать
+                        </button>
+                        <button class="btn delete-btn" data-id="${backup.id}" style="background: #ef4444;">
+                            🗑️ Удалить
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Добавить обработчики событий
+        document.querySelectorAll('.restore-btn').forEach(btn => {
+            btn.addEventListener('click', () => restoreBackup(btn.dataset.id));
+        });
+
+        document.querySelectorAll('.download-btn').forEach(btn => {
+            btn.addEventListener('click', () => downloadBackup(btn.dataset.id));
+        });
+
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteBackup(btn.dataset.id));
+        });
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    async function createBackup() {
+        const btn = document.getElementById('createBackupBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Создание бэкапа...';
+
+        try {
+            const response = await fetch(`${apiBase}/backups/create_backup/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ server_id: serverId })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showAlert('Бэкап успешно создан!', 'success');
+                loadBackups();
+            } else {
+                showAlert(data.error || 'Ошибка создания бэкапа', 'error');
+            }
+        } catch (error) {
+            showAlert(`Ошибка сети: ${error.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '➕ Создать Бэкап';
+        }
+    }
+
+    async function restoreBackup(backupId) {
+        if (!confirm('Вы уверены, что хотите восстановить этот бэкап? Текущие данные будут заменены.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${apiBase}/backups/${backupId}/restore/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showAlert('Восстановление бэкапа начато!', 'success');
+            } else {
+                showAlert(data.error || 'Ошибка восстановления бэкапа', 'error');
+            }
+        } catch (error) {
+            showAlert(`Ошибка сети: ${error.message}`, 'error');
+        }
+    }
+
+    function downloadBackup(backupId) {
+        showAlert('Функция скачивания будет реализована позже', 'success');
+    }
+
+    async function deleteBackup(backupId) {
+        if (!confirm('Вы уверены, что хотите удалить этот бэкап?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${apiBase}/backups/${backupId}/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+
+            if (response.ok || response.status === 204) {
+                showAlert('Бэкап удален!', 'success');
+                loadBackups();
+            } else {
+                showAlert('Ошибка удаления бэкапа', 'error');
+            }
+        } catch (error) {
+            showAlert(`Ошибка сети: ${error.message}`, 'error');
+        }
+    }
+
+    document.getElementById('createBackupBtn').addEventListener('click', createBackup);
+
+    // Загрузить данные при загрузке страницы
+    loadServerInfo();
+    loadBackups();
+</script>
+{% endblock %}

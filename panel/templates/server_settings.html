@@ -1,0 +1,320 @@
+{% extends 'base.html' %}
+
+{% block title %}Настройки Сервера{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-form {
+        max-width: 800px;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        color: #374151;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 5px;
+        font-size: 1rem;
+        transition: border-color 0.3s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    .form-group small {
+        display: block;
+        color: #6b7280;
+        margin-top: 0.25rem;
+        font-size: 0.875rem;
+    }
+
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: auto;
+        cursor: pointer;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 5px;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+
+    .alert-success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #10b981;
+    }
+
+    .alert-error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #ef4444;
+    }
+
+    .loading-spinner {
+        text-align: center;
+        padding: 2rem;
+        color: #667eea;
+    }
+
+    .section-title {
+        color: #667eea;
+        border-bottom: 2px solid #667eea;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+        margin-top: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="alertContainer"></div>
+
+<div class="card">
+    <h2 style="color: #667eea; margin-bottom: 1.5rem;">
+        ⚙️ Настройки Сервера: <span id="serverName">Загрузка...</span>
+    </h2>
+
+    <div id="formContainer">
+        <div class="loading-spinner">
+            <p>⏳ Загрузка настроек...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const serverId = {{ server_id }};
+    const apiBase = '/api';
+    let settingsId = null;
+
+    function showAlert(message, type) {
+        const alertContainer = document.getElementById('alertContainer');
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.textContent = message;
+        alertContainer.appendChild(alert);
+        
+        setTimeout(() => {
+            alert.remove();
+        }, 5000);
+    }
+
+    async function loadServerInfo() {
+        try {
+            const response = await fetch(`${apiBase}/servers/${serverId}/`);
+            const data = await response.json();
+            document.getElementById('serverName').textContent = data.name;
+        } catch (error) {
+            console.error('Error loading server info:', error);
+        }
+    }
+
+    async function loadSettings() {
+        try {
+            const response = await fetch(`${apiBase}/settings/?server=${serverId}`);
+            const data = await response.json();
+
+            const settings = (data.results || data)[0];
+            
+            if (settings) {
+                settingsId = settings.id;
+                displaySettingsForm(settings);
+            } else {
+                // Если настроек нет, создаем форму с пустыми значениями
+                displaySettingsForm({
+                    max_players: 20,
+                    difficulty: 'NORMAL',
+                    gamemode: 'SURVIVAL',
+                    pvp: true,
+                    hardcore: false,
+                    allow_flight: false,
+                    spawn_monsters: true,
+                    spawn_animals: true,
+                    white_list: false,
+                    motd: 'A Minecraft Server'
+                });
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            document.getElementById('formContainer').innerHTML = 
+                '<p style="text-align: center; color: #ef4444; padding: 2rem;">Ошибка загрузки настроек</p>';
+        }
+    }
+
+    function displaySettingsForm(settings) {
+        const container = document.getElementById('formContainer');
+        
+        container.innerHTML = `
+            <form id="settingsForm" class="settings-form">
+                <h3 class="section-title">Основные настройки</h3>
+                
+                <div class="form-group">
+                    <label for="maxPlayers">Максимум игроков</label>
+                    <input type="number" id="maxPlayers" name="max_players" value="${settings.max_players}" min="1" max="1000">
+                    <small>Максимальное количество игроков на сервере</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="motd">MOTD (Сообщение дня)</label>
+                    <textarea id="motd" name="motd">${settings.motd || ''}</textarea>
+                    <small>Сообщение, которое видят игроки в списке серверов</small>
+                </div>
+
+                <h3 class="section-title">Игровые настройки</h3>
+
+                <div class="form-group">
+                    <label for="difficulty">Сложность</label>
+                    <select id="difficulty" name="difficulty">
+                        <option value="PEACEFUL" ${settings.difficulty === 'PEACEFUL' ? 'selected' : ''}>Мирная</option>
+                        <option value="EASY" ${settings.difficulty === 'EASY' ? 'selected' : ''}>Легкая</option>
+                        <option value="NORMAL" ${settings.difficulty === 'NORMAL' ? 'selected' : ''}>Нормальная</option>
+                        <option value="HARD" ${settings.difficulty === 'HARD' ? 'selected' : ''}>Сложная</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="gamemode">Режим игры</label>
+                    <select id="gamemode" name="gamemode">
+                        <option value="SURVIVAL" ${settings.gamemode === 'SURVIVAL' ? 'selected' : ''}>Выживание</option>
+                        <option value="CREATIVE" ${settings.gamemode === 'CREATIVE' ? 'selected' : ''}>Творчество</option>
+                        <option value="ADVENTURE" ${settings.gamemode === 'ADVENTURE' ? 'selected' : ''}>Приключение</option>
+                        <option value="SPECTATOR" ${settings.gamemode === 'SPECTATOR' ? 'selected' : ''}>Наблюдатель</option>
+                    </select>
+                </div>
+
+                <h3 class="section-title">Дополнительные настройки</h3>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="pvp" name="pvp" ${settings.pvp ? 'checked' : ''}>
+                    <label for="pvp">PvP (Игрок против игрока)</label>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="hardcore" name="hardcore" ${settings.hardcore ? 'checked' : ''}>
+                    <label for="hardcore">Хардкор режим</label>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="allowFlight" name="allow_flight" ${settings.allow_flight ? 'checked' : ''}>
+                    <label for="allowFlight">Разрешить полет</label>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="spawnMonsters" name="spawn_monsters" ${settings.spawn_monsters ? 'checked' : ''}>
+                    <label for="spawnMonsters">Спавн монстров</label>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="spawnAnimals" name="spawn_animals" ${settings.spawn_animals ? 'checked' : ''}>
+                    <label for="spawnAnimals">Спавн животных</label>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="whiteList" name="white_list" ${settings.white_list ? 'checked' : ''}>
+                    <label for="whiteList">Белый список</label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn" style="background: #10b981;">💾 Сохранить</button>
+                    <button type="button" id="resetBtn" class="btn" style="background: #6b7280;">🔄 Сбросить</button>
+                </div>
+            </form>
+        `;
+
+        document.getElementById('settingsForm').addEventListener('submit', saveSettings);
+        document.getElementById('resetBtn').addEventListener('click', loadSettings);
+    }
+
+    async function saveSettings(e) {
+        e.preventDefault();
+
+        const formData = new FormData(e.target);
+        const data = {
+            server: serverId,
+            max_players: parseInt(formData.get('max_players')),
+            difficulty: formData.get('difficulty'),
+            gamemode: formData.get('gamemode'),
+            pvp: formData.get('pvp') === 'on',
+            hardcore: formData.get('hardcore') === 'on',
+            allow_flight: formData.get('allow_flight') === 'on',
+            spawn_monsters: formData.get('spawn_monsters') === 'on',
+            spawn_animals: formData.get('spawn_animals') === 'on',
+            white_list: formData.get('white_list') === 'on',
+            motd: formData.get('motd')
+        };
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Сохранение...';
+
+        try {
+            const url = settingsId ? `${apiBase}/settings/${settingsId}/` : `${apiBase}/settings/`;
+            const method = settingsId ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                showAlert('Настройки успешно сохранены!', 'success');
+                const savedData = await response.json();
+                settingsId = savedData.id;
+            } else {
+                const error = await response.json();
+                showAlert(error.detail || 'Ошибка сохранения настроек', 'error');
+            }
+        } catch (error) {
+            showAlert(`Ошибка сети: ${error.message}`, 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '💾 Сохранить';
+        }
+    }
+
+    // Загрузить данные при загрузке страницы
+    loadServerInfo();
+    loadSettings();
+</script>
+{% endblock %}

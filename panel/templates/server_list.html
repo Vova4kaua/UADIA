@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+
+{% block title %}Список Серверов{% endblock %}
+
+{% block extra_css %}
+<style>
+    .loading-spinner {
+        text-align: center;
+        padding: 2rem;
+        color: #667eea;
+    }
+
+    .filter-bar {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .filter-bar input,
+    .filter-bar select {
+        padding: 0.75rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 5px;
+        font-size: 1rem;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .server-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+        transition: transform 0.3s, box-shadow 0.3s;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .server-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    .server-info h3 {
+        color: #667eea;
+        margin-bottom: 0.5rem;
+    }
+
+    .server-meta {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        color: #6b7280;
+        font-size: 0.9rem;
+    }
+
+    .server-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        text-align: center;
+    }
+
+    .stat-card h4 {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-card p {
+        font-size: 2rem;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="color: #667eea;">📋 Список Серверов</h2>
+        <a href="{% url 'panel:server_create' %}" class="btn">➕ Создать Сервер</a>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <h4>Всего Серверов</h4>
+            <p id="totalServers">0</p>
+        </div>
+        <div class="stat-card">
+            <h4>Онлайн</h4>
+            <p id="onlineServers">0</p>
+        </div>
+        <div class="stat-card">
+            <h4>Оффлайн</h4>
+            <p id="offlineServers">0</p>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="🔍 Поиск серверов...">
+        <select id="statusFilter">
+            <option value="">Все статусы</option>
+            <option value="online">Онлайн</option>
+            <option value="offline">Оффлайн</option>
+        </select>
+        <select id="typeFilter">
+            <option value="">Все типы</option>
+        </select>
+    </div>
+    
+    <div id="serversContainer">
+        <div class="loading-spinner">
+            <p>⏳ Загрузка серверов...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const apiBase = '/api/servers';
+    let allServers = [];
+
+    async function loadServers() {
+        try {
+            const response = await fetch(`${apiBase}/`);
+            const data = await response.json();
+
+            allServers = data.results || data;
+            displayServers(allServers);
+            updateStats(allServers);
+        } catch (error) {
+            console.error('Error loading servers:', error);
+            document.getElementById('serversContainer').innerHTML = 
+                '<p style="text-align: center; color: #ef4444; padding: 2rem;">Ошибка загрузки серверов</p>';
+        }
+    }
+
+    async function loadServerTypes() {
+        try {
+            const response = await fetch(`${apiBase}/available_types/`);
+            const types = await response.json();
+            
+            const typeFilter = document.getElementById('typeFilter');
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type.value;
+                option.textContent = type.label;
+                typeFilter.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading server types:', error);
+        }
+    }
+
+    function displayServers(servers) {
+        const container = document.getElementById('serversContainer');
+        
+        if (servers.length === 0) {
+            container.innerHTML = `
+                <p style="text-align: center; color: #6b7280; padding: 2rem;">
+                    Нет доступных серверов. Создайте первый сервер!
+                </p>
+                <div style="text-align: center;">
+                    <a href="{% url 'panel:server_create' %}" class="btn">➕ Создать Сервер</a>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = servers.map(server => `
+            <div class="server-card">
+                <div class="server-info">
+                    <h3>${server.name}</h3>
+                    <div class="server-meta">
+                        <span>🌐 ${server.ip_address}:${server.port}</span>
+                        <span>📦 ${server.minecraft_version}</span>
+                        <span>🔧 ${server.server_type}</span>
+                        <span>${server.is_online ? 
+                            '<span class="status-online">🟢 Онлайн</span>' : 
+                            '<span class="status-offline">🔴 Оффлайн</span>'
+                        }</span>
+                    </div>
+                </div>
+                <div class="server-actions">
+                    <a href="/panel/servers/${server.id}/" class="btn" style="padding: 0.5rem 1rem;">
+                        Управление
+                    </a>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function updateStats(servers) {
+        const total = servers.length;
+        const online = servers.filter(s => s.is_online).length;
+        const offline = total - online;
+
+        document.getElementById('totalServers').textContent = total;
+        document.getElementById('onlineServers').textContent = online;
+        document.getElementById('offlineServers').textContent = offline;
+    }
+
+    function filterServers() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const typeFilter = document.getElementById('typeFilter').value;
+
+        let filtered = allServers.filter(server => {
+            const matchesSearch = server.name.toLowerCase().includes(searchTerm) ||
+                                 server.ip_address.toLowerCase().includes(searchTerm);
+            
+            const matchesStatus = !statusFilter || 
+                                 (statusFilter === 'online' && server.is_online) ||
+                                 (statusFilter === 'offline' && !server.is_online);
+            
+            const matchesType = !typeFilter || server.server_type === typeFilter;
+
+            return matchesSearch && matchesStatus && matchesType;
+        });
+
+        displayServers(filtered);
+    }
+
+    document.getElementById('searchInput').addEventListener('input', filterServers);
+    document.getElementById('statusFilter').addEventListener('change', filterServers);
+    document.getElementById('typeFilter').addEventListener('change', filterServers);
+
+    // Загрузить данные при загрузке страницы
+    loadServers();
+    loadServerTypes();
+
+    // Автообновление каждые 30 секунд
+    setInterval(loadServers, 30000);
+</script>
+{% endblock %}

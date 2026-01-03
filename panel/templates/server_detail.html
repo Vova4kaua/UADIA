@@ -1,0 +1,363 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ server.name }} - Server Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    .server-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .server-title-section {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .server-icon {
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+        border-radius: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 0.5rem;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 2rem;
+        overflow-x: auto;
+    }
+
+    .tab {
+        padding: 1rem 1.5rem;
+        color: var(--text-secondary);
+        text-decoration: none;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .tab:hover {
+        color: var(--text-primary);
+    }
+
+    .tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .info-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+
+    .info-value {
+        font-size: 1.125rem;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .action-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+    }
+
+    .console-container {
+        background: #000;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+        height: 400px;
+        overflow-y: auto;
+        color: #0f0;
+    }
+
+    .console-line {
+        margin-bottom: 0.25rem;
+    }
+
+    .console-input {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .console-input input {
+        flex: 1;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        color: #0f0;
+        font-family: 'Courier New', monospace;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="server-header">
+    <div class="server-title-section">
+        <div class="server-icon">🖥️</div>
+        <div>
+            <h1 class="page-title" id="serverName">{{ server.name }}</h1>
+            <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
+                <span id="serverStatus">
+                    {% if server.is_online %}
+                        <span class="status-badge online">
+                            <span class="status-dot"></span>
+                            Online
+                        </span>
+                    {% else %}
+                        <span class="status-badge offline">
+                            <span class="status-dot"></span>
+                            Offline
+                        </span>
+                    {% endif %}
+                </span>
+                <span style="color: var(--text-secondary); font-size: 0.875rem;">
+                    {{ server.ip_address }}:{{ server.port }}
+                </span>
+            </div>
+        </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+        <button id="startBtn" class="btn btn-success">▶️ Start</button>
+        <button id="restartBtn" class="btn btn-warning">🔄 Restart</button>
+        <button id="stopBtn" class="btn btn-danger">⏹️ Stop</button>
+    </div>
+</div>
+
+<div class="tabs">
+    <a href="#" class="tab active" data-tab="console">📟 Console</a>
+    <a href="{% url 'panel:server_settings' server.id %}" class="tab">⚙️ Settings</a>
+    <a href="{% url 'panel:plugins' server.id %}" class="tab">🔌 Plugins</a>
+    <a href="{% url 'panel:backups' server.id %}" class="tab">💾 Backups</a>
+    <a href="{% url 'panel:resource_usage' server.id %}" class="tab">📊 Resources</a>
+    <a href="{% url 'panel:server_logs' server.id %}" class="tab">📝 Logs</a>
+</div>
+
+<div class="grid grid-4" style="margin-bottom: 2rem;">
+    <div class="stat-card">
+        <div class="stat-label">CPU Usage</div>
+        <div class="stat-value" id="cpuUsage">0%</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Memory</div>
+        <div class="stat-value" id="memUsage">0 MB</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Players</div>
+        <div class="stat-value" id="playerCount">0/20</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Uptime</div>
+        <div class="stat-value" id="uptime">00:00:00</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Server Information</div>
+    </div>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Server Type</div>
+            <div class="info-value" id="serverType">{{ server.get_server_type_display }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Minecraft Version</div>
+            <div class="info-value" id="serverVersion">{{ server.minecraft_version }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">IP Address</div>
+            <div class="info-value" id="serverIp">{{ server.ip_address }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Port</div>
+            <div class="info-value" id="serverPort">{{ server.port }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Created</div>
+            <div class="info-value">{{ server.created_at|date:"d.m.Y H:i" }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Owner</div>
+            <div class="info-value">{{ server.owner.username }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Console</div>
+        <button class="btn btn-secondary" id="clearConsole">🗑️ Clear</button>
+    </div>
+    <div class="console-container" id="consoleOutput">
+        <div class="console-line">[Server] Waiting for server to start...</div>
+    </div>
+    <div class="console-input">
+        <input type="text" id="consoleCommand" placeholder="Enter command..." class="form-input">
+        <button class="btn btn-primary" id="sendCommand">Send</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const serverId = {{ server.id }};
+    const apiBase = '/api/servers';
+
+    function showAlert(message, type) {
+        const alertsContainer = document.querySelector('.main-content');
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.innerHTML = `
+            <span>${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+            <span>${message}</span>
+        `;
+        alertsContainer.insertBefore(alert, alertsContainer.firstChild);
+        
+        setTimeout(() => {
+            alert.style.animation = 'slideUp 0.3s ease-out';
+            setTimeout(() => alert.remove(), 300);
+        }, 5000);
+    }
+
+    function updateServerStatus(isOnline) {
+        const statusElement = document.getElementById('serverStatus');
+        if (isOnline) {
+            statusElement.innerHTML = '<span class="status-badge online"><span class="status-dot"></span>Online</span>';
+        } else {
+            statusElement.innerHTML = '<span class="status-badge offline"><span class="status-dot"></span>Offline</span>';
+        }
+    }
+
+    async function performServerAction(action) {
+        const buttons = document.querySelectorAll('.server-header button');
+        buttons.forEach(btn => {
+            btn.disabled = true;
+            btn.classList.add('loading');
+        });
+
+        try {
+            const response = await fetch(`${apiBase}/${serverId}/${action}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showAlert(data.status || `Server ${action} successful`, 'success');
+                addConsoleLog(`[System] Server ${action} initiated`);
+                
+                if (data.server) {
+                    updateServerStatus(data.server.is_online);
+                }
+
+                setTimeout(() => loadServerData(), 2000);
+            } else {
+                showAlert(data.error || `Error executing ${action}`, 'error');
+                addConsoleLog(`[Error] ${data.error || 'Failed to execute action'}`, 'error');
+            }
+        } catch (error) {
+            showAlert(`Network error: ${error.message}`, 'error');
+            addConsoleLog(`[Error] ${error.message}`, 'error');
+        } finally {
+            buttons.forEach(btn => {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+            });
+        }
+    }
+
+    function addConsoleLog(message, type = 'info') {
+        const console = document.getElementById('consoleOutput');
+        const line = document.createElement('div');
+        line.className = 'console-line';
+        const timestamp = new Date().toLocaleTimeString();
+        line.textContent = `[${timestamp}] ${message}`;
+        if (type === 'error') line.style.color = '#f00';
+        if (type === 'warning') line.style.color = '#ff0';
+        console.appendChild(line);
+        console.scrollTop = console.scrollHeight;
+    }
+
+    async function loadServerData() {
+        try {
+            const response = await fetch(`${apiBase}/${serverId}/`);
+            const data = await response.json();
+
+            if (response.ok) {
+                document.getElementById('serverName').textContent = data.name;
+                document.getElementById('serverIp').textContent = data.ip_address;
+                document.getElementById('serverPort').textContent = data.port;
+                document.getElementById('serverVersion').textContent = data.minecraft_version;
+                updateServerStatus(data.is_online);
+            }
+        } catch (error) {
+            console.error('Error loading server data:', error);
+        }
+    }
+
+    document.getElementById('startBtn').addEventListener('click', () => performServerAction('start'));
+    document.getElementById('stopBtn').addEventListener('click', () => performServerAction('stop'));
+    document.getElementById('restartBtn').addEventListener('click', () => performServerAction('restart'));
+
+    document.getElementById('clearConsole').addEventListener('click', () => {
+        document.getElementById('consoleOutput').innerHTML = '';
+        addConsoleLog('[System] Console cleared');
+    });
+
+    document.getElementById('sendCommand').addEventListener('click', () => {
+        const input = document.getElementById('consoleCommand');
+        const command = input.value.trim();
+        if (command) {
+            addConsoleLog(`> ${command}`, 'info');
+            // TODO: Send command to server API
+            input.value = '';
+        }
+    });
+
+    document.getElementById('consoleCommand').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('sendCommand').click();
+        }
+    });
+
+    // Simulate stats updates
+    setInterval(() => {
+        document.getElementById('cpuUsage').textContent = `${Math.floor(Math.random() * 60)}%`;
+        document.getElementById('memUsage').textContent = `${Math.floor(Math.random() * 2000)} MB`;
+    }, 3000);
+
+    // Auto-refresh server data
+    setInterval(loadServerData, 10000);
+</script>
+{% endblock %}

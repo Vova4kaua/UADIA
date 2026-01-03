@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+
+{% block title %}Использование Ресурсов{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .stat-card h3 {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-card .value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-card .progress {
+        background: rgba(255,255,255,0.2);
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 0.5rem;
+    }
+
+    .stat-card .progress-bar {
+        height: 100%;
+        background: white;
+        transition: width 0.3s;
+    }
+
+    .chart-container {
+        background: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .chart-placeholder {
+        height: 300px;
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6b7280;
+        font-size: 1.2rem;
+    }
+
+    .loading-spinner {
+        text-align: center;
+        padding: 2rem;
+        color: #667eea;
+    }
+
+    .controls {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 style="color: #667eea; margin-bottom: 1.5rem;">
+        📊 Использование Ресурсов: <span id="serverName">Загрузка...</span>
+    </h2>
+
+    <div class="controls">
+        <button id="refreshBtn" class="btn">🔄 Обновить</button>
+        <button id="autoRefreshBtn" class="btn" style="background: #10b981;">▶️ Авто-обновление</button>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <h3>CPU Использование</h3>
+            <div class="value" id="cpuValue">0%</div>
+            <div class="progress">
+                <div class="progress-bar" id="cpuBar" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <h3>RAM Использование</h3>
+            <div class="value" id="ramValue">0 MB</div>
+            <div class="progress">
+                <div class="progress-bar" id="ramBar" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <h3>Диск Использование</h3>
+            <div class="value" id="diskValue">0 GB</div>
+            <div class="progress">
+                <div class="progress-bar" id="diskBar" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <h3>Сетевая Активность</h3>
+            <div class="value" id="networkValue">0 KB/s</div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <h3 style="color: #667eea; margin-bottom: 1rem;">История использования ресурсов</h3>
+        <div class="chart-placeholder">
+            📈 График будет добавлен в следующем обновлении
+        </div>
+    </div>
+
+    <div class="card" style="background: #f9fafb;">
+        <h3 style="color: #667eea; margin-bottom: 1rem;">Последние измерения</h3>
+        <div id="historyContainer">
+            <div class="loading-spinner">
+                <p>⏳ Загрузка истории...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const serverId = {{ server_id }};
+    const apiBase = '/api';
+    let autoRefresh = false;
+    let refreshInterval = null;
+
+    async function loadServerInfo() {
+        try {
+            const response = await fetch(`${apiBase}/servers/${serverId}/`);
+            const data = await response.json();
+            document.getElementById('serverName').textContent = data.name;
+        } catch (error) {
+            console.error('Error loading server info:', error);
+        }
+    }
+
+    async function loadCurrentUsage() {
+        try {
+            const response = await fetch(`${apiBase}/resource-usage/current/?server_id=${serverId}`);
+            const data = await response.json();
+
+            if (response.ok && data.cpu_usage !== undefined) {
+                updateStats(data);
+            } else {
+                // Если нет данных, показываем значения по умолчанию
+                updateStats({
+                    cpu_usage: 0,
+                    memory_usage: 0,
+                    disk_usage: 0,
+                    network_usage: 0
+                });
+            }
+        } catch (error) {
+            console.error('Error loading resource usage:', error);
+        }
+    }
+
+    async function loadUsageHistory() {
+        try {
+            const response = await fetch(`${apiBase}/resource-usage/?server=${serverId}`);
+            const data = await response.json();
+
+            const usages = data.results || data;
+            displayHistory(usages.slice(0, 10)); // Показываем последние 10 записей
+        } catch (error) {
+            console.error('Error loading usage history:', error);
+            document.getElementById('historyContainer').innerHTML = 
+                '<p style="text-align: center; color: #ef4444;">Ошибка загрузки истории</p>';
+        }
+    }
+
+    function updateStats(data) {
+        // CPU
+        const cpuPercent = Math.round(data.cpu_usage || 0);
+        document.getElementById('cpuValue').textContent = `${cpuPercent}%`;
+        document.getElementById('cpuBar').style.width = `${cpuPercent}%`;
+
+        // RAM
+        const ramMB = Math.round(data.memory_usage || 0);
+        const maxRam = 4096; // Предполагаем максимум 4GB
+        const ramPercent = Math.min((ramMB / maxRam) * 100, 100);
+        document.getElementById('ramValue').textContent = `${ramMB} MB`;
+        document.getElementById('ramBar').style.width = `${ramPercent}%`;
+
+        // Disk
+        const diskGB = (data.disk_usage || 0).toFixed(2);
+        const maxDisk = 100; // Предполагаем максимум 100GB
+        const diskPercent = Math.min((diskGB / maxDisk) * 100, 100);
+        document.getElementById('diskValue').textContent = `${diskGB} GB`;
+        document.getElementById('diskBar').style.width = `${diskPercent}%`;
+
+        // Network
+        const networkKB = (data.network_usage || 0).toFixed(2);
+        document.getElementById('networkValue').textContent = `${networkKB} KB/s`;
+    }
+
+    function displayHistory(usages) {
+        const container = document.getElementById('historyContainer');
+        
+        if (usages.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #6b7280;">Нет данных об использовании ресурсов</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Время</th>
+                        <th>CPU</th>
+                        <th>RAM</th>
+                        <th>Диск</th>
+                        <th>Сеть</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${usages.map(usage => {
+                        const time = new Date(usage.timestamp).toLocaleString('ru-RU');
+                        return `
+                            <tr>
+                                <td>${time}</td>
+                                <td>${Math.round(usage.cpu_usage || 0)}%</td>
+                                <td>${Math.round(usage.memory_usage || 0)} MB</td>
+                                <td>${(usage.disk_usage || 0).toFixed(2)} GB</td>
+                                <td>${(usage.network_usage || 0).toFixed(2)} KB/s</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    function toggleAutoRefresh() {
+        autoRefresh = !autoRefresh;
+        const btn = document.getElementById('autoRefreshBtn');
+
+        if (autoRefresh) {
+            btn.textContent = '⏸️ Остановить';
+            btn.style.background = '#ef4444';
+            refreshInterval = setInterval(() => {
+                loadCurrentUsage();
+                loadUsageHistory();
+            }, 5000);
+        } else {
+            btn.textContent = '▶️ Авто-обновление';
+            btn.style.background = '#10b981';
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        loadCurrentUsage();
+        loadUsageHistory();
+    });
+
+    document.getElementById('autoRefreshBtn').addEventListener('click', toggleAutoRefresh);
+
+    // Загрузить данные при загрузке страницы
+    loadServerInfo();
+    loadCurrentUsage();
+    loadUsageHistory();
+
+    // Автообновление каждые 10 секунд
+    setInterval(() => {
+        loadCurrentUsage();
+    }, 10000);
+</script>
+{% endblock %}

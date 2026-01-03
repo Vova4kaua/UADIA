@@ -1,0 +1,391 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ server.name }} - Logs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .logs-container {
+        background: #000;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        font-family: 'Courier New', Consolas, monospace;
+        font-size: 0.875rem;
+        height: 600px;
+        overflow-y: auto;
+        color: #0f0;
+        line-height: 1.6;
+    }
+
+    .log-line {
+        margin-bottom: 0.25rem;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .log-line.info { color: #3b82f6; }
+    .log-line.warning { color: #f59e0b; }
+    .log-line.error { color: #ef4444; }
+    .log-line.success { color: #10b981; }
+    .log-line.debug { color: #94a3b8; }
+
+    .log-controls {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .log-filter {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .filter-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: var(--bg-tertiary);
+        border-radius: 0.5rem;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s;
+    }
+
+    .filter-checkbox:hover {
+        background: var(--bg-secondary);
+    }
+
+    .filter-checkbox input {
+        cursor: pointer;
+    }
+
+    .log-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .log-stat {
+        background: var(--bg-tertiary);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        text-align: center;
+    }
+
+    .log-stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .log-stat-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-top: 0.25rem;
+    }
+
+    .log-search {
+        flex: 1;
+        min-width: 300px;
+    }
+
+    .auto-scroll-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: var(--bg-tertiary);
+        border-radius: 0.5rem;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .auto-scroll-toggle input {
+        cursor: pointer;
+    }
+
+    .timestamp {
+        color: #6b7280;
+        margin-right: 0.5rem;
+    }
+
+    .log-level {
+        display: inline-block;
+        padding: 0.125rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+        margin-right: 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .log-level.INFO { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+    .log-level.WARN { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+    .log-level.ERROR { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    .log-level.DEBUG { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+    .log-level.SUCCESS { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="{% url 'panel:server_list' %}">Servers</a>
+    <span>/</span>
+    <a href="{% url 'panel:server_detail' server.id %}">{{ server.name }}</a>
+    <span>/</span>
+    <span>Logs</span>
+</div>
+
+<h1 class="page-title">Server Logs</h1>
+
+<div class="card">
+    <div class="log-stats">
+        <div class="log-stat">
+            <div class="log-stat-value" id="totalLogs">0</div>
+            <div class="log-stat-label">Total Lines</div>
+        </div>
+        <div class="log-stat">
+            <div class="log-stat-value" id="errorCount" style="color: var(--danger);">0</div>
+            <div class="log-stat-label">Errors</div>
+        </div>
+        <div class="log-stat">
+            <div class="log-stat-value" id="warningCount" style="color: var(--warning);">0</div>
+            <div class="log-stat-label">Warnings</div>
+        </div>
+        <div class="log-stat">
+            <div class="log-stat-value" id="infoCount" style="color: var(--accent);">0</div>
+            <div class="log-stat-label">Info</div>
+        </div>
+    </div>
+
+    <div class="log-controls">
+        <input type="text" class="form-input log-search" id="logSearch" placeholder="Search logs...">
+        
+        <div class="log-filter">
+            <label class="filter-checkbox">
+                <input type="checkbox" checked data-level="info">
+                <span style="color: var(--accent);">📘 Info</span>
+            </label>
+            <label class="filter-checkbox">
+                <input type="checkbox" checked data-level="warning">
+                <span style="color: var(--warning);">⚠️ Warning</span>
+            </label>
+            <label class="filter-checkbox">
+                <input type="checkbox" checked data-level="error">
+                <span style="color: var(--danger);">❌ Error</span>
+            </label>
+            <label class="filter-checkbox">
+                <input type="checkbox" checked data-level="debug">
+                <span style="color: var(--text-secondary);">🐛 Debug</span>
+            </label>
+        </div>
+
+        <label class="auto-scroll-toggle">
+            <input type="checkbox" id="autoScroll" checked>
+            <span>Auto-scroll</span>
+        </label>
+
+        <button class="btn btn-secondary" id="clearLogs">🗑️ Clear</button>
+        <button class="btn btn-primary" id="downloadLogs">💾 Download</button>
+        <button class="btn btn-success" id="refreshLogs">🔄 Refresh</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="logs-container" id="logsContainer">
+        <div class="log-line">
+            <span class="timestamp">[00:00:00]</span>
+            <span class="log-level INFO">INFO</span>
+            <span>Server starting...</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const serverId = {{ server.id }};
+    let autoScroll = true;
+    let logs = [];
+    let filteredLevels = new Set(['info', 'warning', 'error', 'debug']);
+    let searchQuery = '';
+    
+    const logLevels = {
+        'INFO': 'info',
+        'WARN': 'warning',
+        'WARNING': 'warning',
+        'ERROR': 'error',
+        'DEBUG': 'debug',
+        'SUCCESS': 'success'
+    };
+
+    function addLog(message, level = 'INFO', timestamp = null) {
+        const time = timestamp || new Date().toLocaleTimeString();
+        const log = { message, level, timestamp: time };
+        logs.push(log);
+        
+        updateStats();
+        
+        if (shouldDisplayLog(log)) {
+            displayLog(log);
+        }
+    }
+
+    function displayLog(log) {
+        const container = document.getElementById('logsContainer');
+        const line = document.createElement('div');
+        line.className = `log-line ${logLevels[log.level] || 'info'}`;
+        
+        line.innerHTML = `
+            <span class="timestamp">[${log.timestamp}]</span>
+            <span class="log-level ${log.level}">${log.level}</span>
+            <span>${escapeHtml(log.message)}</span>
+        `;
+        
+        container.appendChild(line);
+        
+        if (autoScroll) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    function shouldDisplayLog(log) {
+        const levelMatch = filteredLevels.has(logLevels[log.level] || 'info');
+        const searchMatch = !searchQuery || log.message.toLowerCase().includes(searchQuery.toLowerCase());
+        return levelMatch && searchMatch;
+    }
+
+    function redrawLogs() {
+        const container = document.getElementById('logsContainer');
+        container.innerHTML = '';
+        
+        logs.forEach(log => {
+            if (shouldDisplayLog(log)) {
+                displayLog(log);
+            }
+        });
+    }
+
+    function updateStats() {
+        let errorCount = 0;
+        let warningCount = 0;
+        let infoCount = 0;
+        
+        logs.forEach(log => {
+            if (log.level === 'ERROR') errorCount++;
+            else if (log.level === 'WARN' || log.level === 'WARNING') warningCount++;
+            else if (log.level === 'INFO') infoCount++;
+        });
+        
+        document.getElementById('totalLogs').textContent = logs.length;
+        document.getElementById('errorCount').textContent = errorCount;
+        document.getElementById('warningCount').textContent = warningCount;
+        document.getElementById('infoCount').textContent = infoCount;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Event listeners
+    document.getElementById('autoScroll').addEventListener('change', (e) => {
+        autoScroll = e.target.checked;
+    });
+
+    document.getElementById('clearLogs').addEventListener('click', () => {
+        if (confirm('Are you sure you want to clear all logs?')) {
+            logs = [];
+            document.getElementById('logsContainer').innerHTML = '';
+            updateStats();
+            showAlert('Logs cleared', 'success');
+        }
+    });
+
+    document.getElementById('downloadLogs').addEventListener('click', () => {
+        const text = logs.map(log => `[${log.timestamp}] [${log.level}] ${log.message}`).join('\n');
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `server-${serverId}-logs-${new Date().toISOString()}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showAlert('Logs downloaded', 'success');
+    });
+
+    document.getElementById('refreshLogs').addEventListener('click', loadLogs);
+
+    document.querySelectorAll('.filter-checkbox input').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const level = e.target.dataset.level;
+            if (e.target.checked) {
+                filteredLevels.add(level);
+            } else {
+                filteredLevels.delete(level);
+            }
+            redrawLogs();
+        });
+    });
+
+    document.getElementById('logSearch').addEventListener('input', (e) => {
+        searchQuery = e.target.value;
+        redrawLogs();
+    });
+
+    async function loadLogs() {
+        try {
+            // TODO: Implement actual API call to fetch logs
+            // For now, simulate logs
+            addLog('Starting Minecraft server version 1.20.4', 'INFO');
+            addLog('Loading libraries, please wait...', 'INFO');
+            addLog('Loaded 0 recipes', 'INFO');
+            addLog('Loaded 1171 advancements', 'INFO');
+            addLog('Starting Minecraft server on *:25565', 'INFO');
+            addLog('Using epoll channel type', 'INFO');
+            addLog('Server permissions file permissions.yml is empty, ignoring it', 'WARN');
+            addLog('Preparing level "world"', 'INFO');
+            addLog('Preparing start region for dimension minecraft:overworld', 'INFO');
+            addLog('Time elapsed: 2547 ms', 'INFO');
+            addLog('Preparing start region for dimension minecraft:the_nether', 'INFO');
+            addLog('Time elapsed: 1273 ms', 'INFO');
+            addLog('Preparing start region for dimension minecraft:the_end', 'INFO');
+            addLog('Time elapsed: 891 ms', 'INFO');
+            addLog('[EssentialsX] Loading EssentialsX v2.20.1', 'INFO');
+            addLog('[WorldEdit] Enabling WorldEdit v7.2.15', 'INFO');
+            addLog('[LuckPerms] Loading LuckPerms v5.4.102', 'INFO');
+            addLog('Done (8.547s)! For help, type "help"', 'SUCCESS');
+            addLog('Player123 joined the game', 'INFO');
+            
+            showAlert('Logs refreshed', 'success');
+        } catch (error) {
+            showAlert('Error loading logs: ' + error.message, 'error');
+        }
+    }
+
+    function showAlert(message, type) {
+        const alertsContainer = document.querySelector('.main-content');
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.innerHTML = `
+            <span>${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+            <span>${message}</span>
+        `;
+        alertsContainer.insertBefore(alert, alertsContainer.firstChild);
+        
+        setTimeout(() => {
+            alert.style.animation = 'slideUp 0.3s ease-out';
+            setTimeout(() => alert.remove(), 300);
+        }, 5000);
+    }
+
+    // Auto-refresh logs every 5 seconds
+    setInterval(loadLogs, 5000);
+
+    // Initial load
+    loadLogs();
+</script>
+{% endblock %}

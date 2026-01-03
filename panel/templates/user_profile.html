@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block title %}Профиль Пользователя{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+
+    .profile-avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        margin: 0 auto 1rem;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .info-card {
+        background: #f9fafb;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border-left: 4px solid #667eea;
+    }
+
+    .info-card h3 {
+        color: #667eea;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .info-card p {
+        color: #374151;
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+
+    .servers-list {
+        list-style: none;
+        padding: 0;
+    }
+
+    .servers-list li {
+        background: white;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-bottom: 0.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    .servers-list li:hover {
+        box-shadow: 0 4px 10px rgba(102, 126, 234, 0.2);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profile-header">
+    <div class="profile-avatar">
+        👤
+    </div>
+    <h2>{{ profile.user.username }}</h2>
+    <p style="opacity: 0.9;">{{ profile.user.email }}</p>
+</div>
+
+<div class="card">
+    <h3 style="color: #667eea; margin-bottom: 1.5rem;">📊 Статистика</h3>
+    
+    <div class="info-grid">
+        <div class="info-card">
+            <h3>Серверов в управлении</h3>
+            <p>{{ profile.owned_servers.count }}</p>
+        </div>
+        
+        <div class="info-card">
+            <h3>Избранный сервер</h3>
+            <p>{% if profile.favorite_server %}{{ profile.favorite_server.name }}{% else %}Не выбран{% endif %}</p>
+        </div>
+        
+        <div class="info-card">
+            <h3>Дата регистрации</h3>
+            <p>{{ profile.user.date_joined|date:"d.m.Y" }}</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h3 style="color: #667eea; margin-bottom: 1.5rem;">🖥️ Мои Серверы</h3>
+    
+    {% if profile.owned_servers.all %}
+        <ul class="servers-list">
+            {% for server in profile.owned_servers.all %}
+            <li>
+                <div>
+                    <strong>{{ server.name }}</strong>
+                    <span style="color: #6b7280; font-size: 0.9rem; margin-left: 1rem;">
+                        {{ server.ip_address }}:{{ server.port }}
+                    </span>
+                </div>
+                <a href="{% url 'server_detail' server.id %}" class="btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    Управление
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p style="text-align: center; color: #6b7280; padding: 2rem;">
+            У вас пока нет серверов
+        </p>
+    {% endif %}
+</div>
+{% endblock %}

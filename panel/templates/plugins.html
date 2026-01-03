@@ -1,0 +1,561 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ server.name }} - Plugins{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-container {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .search-input {
+        flex: 1;
+    }
+
+    .source-tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .source-tab {
+        padding: 0.75rem 1.5rem;
+        background: var(--bg-tertiary);
+        border: none;
+        color: var(--text-secondary);
+        border-radius: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 500;
+    }
+
+    .source-tab:hover {
+        color: var(--text-primary);
+    }
+
+    .source-tab.active {
+        background: var(--accent);
+        color: white;
+    }
+
+    .plugins-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .plugin-card {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .plugin-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+    }
+
+    .plugin-header {
+        display: flex;
+        align-items: start;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .plugin-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .plugin-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 0.5rem;
+    }
+
+    .plugin-info {
+        flex: 1;
+    }
+
+    .plugin-name {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.25rem;
+    }
+
+    .plugin-author {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+
+    .plugin-description {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        margin-bottom: 1rem;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .plugin-stats {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-bottom: 1rem;
+    }
+
+    .plugin-stat {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .plugin-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .plugin-tag {
+        padding: 0.25rem 0.75rem;
+        background: rgba(59, 130, 246, 0.1);
+        color: var(--accent);
+        border-radius: 9999px;
+        font-size: 0.75rem;
+    }
+
+    .plugin-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .installed-plugins {
+        margin-bottom: 2rem;
+    }
+
+    .installed-plugin {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .installed-plugin-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .plugin-version {
+        padding: 0.25rem 0.5rem;
+        background: rgba(16, 185, 129, 0.1);
+        color: var(--success);
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .loading-skeleton {
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        max-width: 600px;
+        width: 100%;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 2rem;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .modal-close:hover {
+        color: var(--text-primary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="{% url 'panel:server_list' %}">Servers</a>
+    <span>/</span>
+    <a href="{% url 'panel:server_detail' server.id %}">{{ server.name }}</a>
+    <span>/</span>
+    <span>Plugins</span>
+</div>
+
+<h1 class="page-title">Plugin Manager</h1>
+
+<!-- Installed Plugins -->
+<div class="card installed-plugins">
+    <div class="card-header">
+        <div class="card-title">Installed Plugins</div>
+        <button class="btn btn-success" id="refreshPlugins">🔄 Refresh</button>
+    </div>
+    <div id="installedPluginsList">
+        <!-- Loaded dynamically -->
+    </div>
+</div>
+
+<!-- Plugin Browser -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Browse Plugins</div>
+    </div>
+
+    <div class="source-tabs">
+        <button class="source-tab active" data-source="modrinth">📦 Modrinth</button>
+        <button class="source-tab" data-source="spigot">🔧 Spigot</button>
+        <button class="source-tab" data-source="hangar">📄 Hangar</button>
+    </div>
+
+    <div class="search-container">
+        <input type="text" class="form-input search-input" id="searchInput" placeholder="Search plugins...">
+        <select class="form-input" id="categoryFilter" style="width: 200px;">
+            <option value="">All Categories</option>
+            <option value="admin">Administration</option>
+            <option value="gameplay">Gameplay</option>
+            <option value="economy">Economy</option>
+            <option value="chat">Chat</option>
+            <option value="world">World Management</option>
+        </select>
+        <button class="btn btn-primary" id="searchBtn">🔍 Search</button>
+    </div>
+
+    <div class="plugins-grid" id="pluginsGrid">
+        <!-- Loaded dynamically -->
+    </div>
+</div>
+
+<!-- Plugin Details Modal -->
+<div class="modal" id="pluginModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalPluginName">Plugin Name</h2>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div id="modalPluginContent">
+            <!-- Plugin details will be loaded here -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const serverId = {{ server.id }};
+    let currentSource = 'modrinth';
+
+    // Load installed plugins
+    async function loadInstalledPlugins() {
+        try {
+            const response = await fetch(`/api/plugins/?server=${serverId}`);
+            const data = await response.json();
+            
+            const container = document.getElementById('installedPluginsList');
+            if (data.results && data.results.length > 0) {
+                container.innerHTML = data.results.map(plugin => `
+                    <div class="installed-plugin">
+                        <div class="installed-plugin-info">
+                            <div class="plugin-icon">🔌</div>
+                            <div>
+                                <div class="plugin-name">${plugin.name}</div>
+                                <div class="plugin-author">by ${plugin.author || 'Unknown'}</div>
+                            </div>
+                            <span class="plugin-version">v${plugin.version}</span>
+                            ${plugin.enabled ? '<span class="status-badge online">Enabled</span>' : '<span class="status-badge offline">Disabled</span>'}
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary" onclick="togglePlugin(${plugin.id})">
+                                ${plugin.enabled ? '⏸️' : '▶️'}
+                            </button>
+                            <button class="btn btn-danger" onclick="uninstallPlugin(${plugin.id})">🗑️</button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No plugins installed</p>';
+            }
+        } catch (error) {
+            console.error('Error loading plugins:', error);
+        }
+    }
+
+    // Source tab switching
+    document.querySelectorAll('.source-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentSource = tab.dataset.source;
+            searchPlugins();
+        });
+    });
+
+    // Search functionality
+    document.getElementById('searchBtn').addEventListener('click', searchPlugins);
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') searchPlugins();
+    });
+
+    async function searchPlugins() {
+        const query = document.getElementById('searchInput').value;
+        const category = document.getElementById('categoryFilter').value;
+        
+        const grid = document.getElementById('pluginsGrid');
+        grid.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Searching...</p>';
+        
+        try {
+            const params = new URLSearchParams({
+                source: currentSource,
+                q: query,
+                limit: 20
+            });
+            
+            if (category) params.append('category', category);
+            
+            const response = await fetch(`/api/plugins/search/?${params}`);
+            const data = await response.json();
+            
+            if (data.results && data.results.length > 0) {
+                grid.innerHTML = data.results.map(plugin => `
+                    <div class="plugin-card">
+                        <div class="plugin-header">
+                            <div class="plugin-icon">
+                                ${plugin.icon_url ? `<img src="${plugin.icon_url}" alt="${plugin.name}">` : '🔌'}
+                            </div>
+                            <div class="plugin-info">
+                                <div class="plugin-name">${plugin.name}</div>
+                                <div class="plugin-author">by ${plugin.author}</div>
+                            </div>
+                        </div>
+                        <div class="plugin-description">${plugin.description || 'No description available'}</div>
+                        <div class="plugin-stats">
+                            <div class="plugin-stat">⬇️ ${formatNumber(plugin.downloads || 0)}</div>
+                            ${plugin.rating ? `<div class="plugin-stat">⭐ ${plugin.rating}/5</div>` : ''}
+                        </div>
+                        ${plugin.categories && plugin.categories.length > 0 ? `
+                            <div class="plugin-tags">
+                                ${plugin.categories.slice(0, 3).map(cat => `<span class="plugin-tag">${cat}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                        <div class="plugin-actions">
+                            <button class="btn btn-primary" onclick='installPlugin(${JSON.stringify(plugin)})'>📥 Install</button>
+                            <button class="btn btn-secondary" onclick='showPluginDetails(${JSON.stringify(plugin)})'>ℹ️ Info</button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                grid.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No plugins found</p>';
+            }
+        } catch (error) {
+            console.error('Error searching plugins:', error);
+            grid.innerHTML = '<p style="text-align: center; color: var(--danger);">Error loading plugins</p>';
+        }
+    }
+
+    async function installPlugin(plugin) {
+        if (!confirm(`Install ${plugin.name}?`)) return;
+        
+        showAlert(`Installing ${plugin.name}...`, 'info');
+        
+        try {
+            const response = await fetch(`/api/servers/${serverId}/plugins/install/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    source: plugin.source,
+                    plugin_id: plugin.id
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                showAlert(`Successfully installed ${plugin.name}!`, 'success');
+                loadInstalledPlugins();
+            } else {
+                showAlert(`Error: ${data.error}`, 'error');
+            }
+        } catch (error) {
+            showAlert(`Error installing plugin: ${error.message}`, 'error');
+        }
+    }
+
+    async function uninstallPlugin(pluginId) {
+        if (!confirm('Are you sure you want to uninstall this plugin?')) return;
+        
+        try {
+            const response = await fetch(`/api/servers/${serverId}/plugins/${pluginId}/uninstall/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                showAlert('Plugin uninstalled successfully', 'success');
+                loadInstalledPlugins();
+            } else {
+                showAlert(`Error: ${data.error}`, 'error');
+            }
+        } catch (error) {
+            showAlert(`Error: ${error.message}`, 'error');
+        }
+    }
+
+    async function togglePlugin(pluginId) {
+        try {
+            const response = await fetch(`/api/servers/${serverId}/plugins/${pluginId}/toggle/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                showAlert(data.status, 'success');
+                loadInstalledPlugins();
+            } else {
+                showAlert(`Error: ${data.error}`, 'error');
+            }
+        } catch (error) {
+            showAlert(`Error: ${error.message}`, 'error');
+        }
+    }
+
+    function showPluginDetails(plugin) {
+        document.getElementById('pluginModal').classList.add('active');
+        document.getElementById('modalPluginName').textContent = plugin.name;
+        
+        document.getElementById('modalPluginContent').innerHTML = `
+            <p>${plugin.description}</p>
+            <div style="margin-top: 1rem;">
+                <strong>Author:</strong> ${plugin.author}<br>
+                <strong>Downloads:</strong> ${formatNumber(plugin.downloads || 0)}<br>
+                <strong>Source:</strong> ${plugin.source}<br>
+            </div>
+        `;
+    }
+
+    function closeModal() {
+        document.getElementById('pluginModal').classList.remove('active');
+    }
+
+    function formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num.toString();
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function showAlert(message, type) {
+        const alertsContainer = document.querySelector('.main-content');
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.innerHTML = `
+            <span>${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+            <span>${message}</span>
+        `;
+        alertsContainer.insertBefore(alert, alertsContainer.firstChild);
+        
+        setTimeout(() => {
+            alert.style.animation = 'slideUp 0.3s ease-out';
+            setTimeout(() => alert.remove(), 300);
+        }, 5000);
+    }
+
+    // Close modal on outside click
+    document.getElementById('pluginModal').addEventListener('click', (e) => {
+        if (e.target.id === 'pluginModal') closeModal();
+    });
+
+    document.getElementById('refreshPlugins').addEventListener('click', loadInstalledPlugins);
+
+    // Initial load
+    loadInstalledPlugins();
+    searchPlugins();
+</script>
+{% endblock %}

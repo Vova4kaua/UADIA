@@ -1,0 +1,408 @@
+{% extends 'base.html' %}
+
+{% block title %}Создать Сервер{% endblock %}
+
+{% block extra_css %}
+<style>
+    .create-form {
+        max-width: 700px;
+        margin: 0 auto;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        color: #374151;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-group label span {
+        color: #ef4444;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: all 0.3s;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group small {
+        display: block;
+        color: #6b7280;
+        margin-top: 0.25rem;
+        font-size: 0.875rem;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .section-title {
+        color: #667eea;
+        border-bottom: 2px solid #667eea;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 5px;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+
+    .alert-error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #ef4444;
+    }
+
+    .alert-success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #10b981;
+    }
+
+    .submit-btn {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-top: 2rem;
+    }
+
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.7);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loading-overlay.active {
+        display: flex;
+    }
+
+    .loading-content {
+        background: white;
+        padding: 2rem 3rem;
+        border-radius: 10px;
+        text-align: center;
+    }
+
+    .spinner {
+        border: 4px solid #f3f4f6;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="spinner"></div>
+        <h3 style="color: #667eea;">Создаем сервер...</h3>
+        <p style="color: #6b7280;">Это может занять несколько минут</p>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="color: #667eea;">🎮 Создать новый сервер</h2>
+        <a href="{% url 'panel:server_list' %}" class="btn" style="background: #6b7280;">← Назад</a>
+    </div>
+
+    <div id="alertContainer"></div>
+
+    <form id="createServerForm" class="create-form">
+        <h3 class="section-title">Основная информация</h3>
+
+        <div class="form-group">
+            <label for="serverName">Название сервера <span>*</span></label>
+            <input type="text" id="serverName" name="name" required placeholder="Мой Minecraft Сервер">
+            <small>Уникальное название для вашего сервера</small>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="serverType">Тип сервера <span>*</span></label>
+                <select id="serverType" name="server_type" required>
+                    <option value="">Выберите тип...</option>
+                </select>
+                <small>Paper рекомендуется для большинства случаев</small>
+            </div>
+
+            <div class="form-group">
+                <label for="minecraftVersion">Версия Minecraft <span>*</span></label>
+                <select id="minecraftVersion" name="minecraft_version" required>
+                    <option value="">Выберите версию...</option>
+                </select>
+                <small>Последняя стабильная версия</small>
+            </div>
+        </div>
+
+        <h3 class="section-title">Настройки сервера</h3>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="serverPort">Порт <span>*</span></label>
+                <input type="number" id="serverPort" name="port" value="25565" required min="1024" max="65535">
+                <small>Стандартный порт: 25565</small>
+            </div>
+
+            <div class="form-group">
+                <label for="serverMemory">Память (RAM) <span>*</span></label>
+                <select id="serverMemory" name="memory" required>
+                    <option value="1G">1 GB</option>
+                    <option value="2G" selected>2 GB (рекомендуется)</option>
+                    <option value="3G">3 GB</option>
+                    <option value="4G">4 GB</option>
+                    <option value="6G">6 GB</option>
+                    <option value="8G">8 GB</option>
+                    <option value="12G">12 GB</option>
+                    <option value="16G">16 GB</option>
+                </select>
+                <small>Больше памяти = лучше производительность</small>
+            </div>
+        </div>
+
+        <h3 class="section-title">Игровые настройки</h3>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="maxPlayers">Макс. игроков</label>
+                <input type="number" id="maxPlayers" name="max_players" value="20" min="1" max="1000">
+                <small>Максимальное количество игроков</small>
+            </div>
+
+            <div class="form-group">
+                <label for="difficulty">Сложность</label>
+                <select id="difficulty" name="difficulty">
+                    <option value="PEACEFUL">Мирная</option>
+                    <option value="EASY">Легкая</option>
+                    <option value="NORMAL" selected>Нормальная</option>
+                    <option value="HARD">Сложная</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="gamemode">Режим игры</label>
+                <select id="gamemode" name="gamemode">
+                    <option value="SURVIVAL" selected>Выживание</option>
+                    <option value="CREATIVE">Творчество</option>
+                    <option value="ADVENTURE">Приключение</option>
+                    <option value="SPECTATOR">Наблюдатель</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="motd">MOTD (Описание)</label>
+                <input type="text" id="motd" name="motd" placeholder="Добро пожаловать на сервер!">
+                <small>Сообщение в списке серверов</small>
+            </div>
+        </div>
+
+        <button type="submit" class="btn submit-btn">
+            🚀 Создать сервер
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const apiBase = '/api';
+
+    function showAlert(message, type) {
+        const alertContainer = document.getElementById('alertContainer');
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.textContent = message;
+        alertContainer.appendChild(alert);
+        
+        setTimeout(() => {
+            alert.remove();
+        }, 5000);
+    }
+
+    function showLoading() {
+        document.getElementById('loadingOverlay').classList.add('active');
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').classList.remove('active');
+    }
+
+    async function loadServerTypes() {
+        try {
+            const response = await fetch(`${apiBase}/servers/available_types/`);
+            const types = await response.json();
+            
+            const select = document.getElementById('serverType');
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type.value;
+                option.textContent = type.label;
+                if (type.value === 'PAPER') {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading server types:', error);
+            showAlert('Ошибка загрузки типов серверов', 'error');
+        }
+    }
+
+    async function loadMinecraftVersions() {
+        try {
+            const response = await fetch(`${apiBase}/servers/available_versions/`);
+            const versions = await response.json();
+            
+            const select = document.getElementById('minecraftVersion');
+            versions.forEach(version => {
+                const option = document.createElement('option');
+                option.value = version.version;
+                option.textContent = version.version + (version.recommended ? ' (рекомендуется)' : '');
+                if (version.recommended && !select.value) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading versions:', error);
+            showAlert('Ошибка загрузки версий Minecraft', 'error');
+        }
+    }
+
+    async function createServer(formData) {
+        showLoading();
+
+        try {
+            // Создаем сервер
+            const response = await fetch(`${apiBase}/servers/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Ошибка создания сервера');
+            }
+
+            const server = await response.json();
+
+            // Создаем настройки сервера
+            const settingsData = {
+                server: server.id,
+                max_players: formData.max_players || 20,
+                difficulty: formData.difficulty || 'NORMAL',
+                gamemode: formData.gamemode || 'SURVIVAL',
+                motd: formData.motd || `Welcome to ${server.name}!`,
+                pvp: true,
+                hardcore: false,
+                allow_flight: false,
+                spawn_monsters: true,
+                spawn_animals: true,
+                white_list: false
+            };
+
+            await fetch(`${apiBase}/settings/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(settingsData)
+            });
+
+            hideLoading();
+            showAlert('Сервер успешно создан!', 'success');
+
+            setTimeout(() => {
+                window.location.href = `/panel/servers/${server.id}/`;
+            }, 2000);
+
+        } catch (error) {
+            hideLoading();
+            showAlert(error.message || 'Ошибка создания сервера', 'error');
+        }
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    document.getElementById('createServerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const formData = {
+            name: document.getElementById('serverName').value,
+            server_type: document.getElementById('serverType').value,
+            minecraft_version: document.getElementById('minecraftVersion').value,
+            port: parseInt(document.getElementById('serverPort').value),
+            memory: document.getElementById('serverMemory').value,
+            max_players: parseInt(document.getElementById('maxPlayers').value),
+            difficulty: document.getElementById('difficulty').value,
+            gamemode: document.getElementById('gamemode').value,
+            motd: document.getElementById('motd').value
+        };
+
+        await createServer(formData);
+    });
+
+    // Загрузить данные при загрузке страницы
+    loadServerTypes();
+    loadMinecraftVersions();
+</script>
+{% endblock %}
